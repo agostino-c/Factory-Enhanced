@@ -173,8 +173,8 @@ public class CokeOvenBlockEntity extends SmartBlockEntity implements IHaveGoggle
         }
 
         if(timer <= totalTime && primaryTank.getSpace() != 0 && secondaryTank.getSpace() != 0){
-           primaryTank.fill(recipe.getPrimaryResult(), IFluidHandler.FluidAction.EXECUTE);
-           secondaryTank.fill(recipe.getSecondaryResult(), IFluidHandler.FluidAction.EXECUTE);
+           primaryTank.forceFill(recipe.getPrimaryResult(), IFluidHandler.FluidAction.EXECUTE);
+           secondaryTank.forceFill(recipe.getSecondaryResult(), IFluidHandler.FluidAction.EXECUTE);
            timer++;
         }
     }
