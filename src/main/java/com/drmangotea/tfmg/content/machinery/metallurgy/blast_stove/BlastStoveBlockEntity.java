@@ -86,20 +86,49 @@ public class BlastStoveBlockEntity extends SmartBlockEntity implements IHaveGogg
         if (!isController() || level == null)
             return;
 
+        if (level.isClientSide) {
+            // Client-side capability objects are only used for local display
+            // (goggles), not real fluid transfer, so refreshing them on this
+            // timer is harmless -- unlike the server, nothing here can trip
+            // Create's one-shot capability-invalidation latch on a live pipe
+            // network.
+            refreshAllMemberCapabilities();
+            return;
+        }
+
+        // Establish the real controller/member relationships first, so the
+        // capability refresh below (and the invalidateCapabilities() it
+        // triggers) reflects the post-formation structure instead of a stale
+        // one from before formMulti() reassigns controllers.
+        int widthBefore = width;
+        int heightBefore = height;
+
+        ConnectivityHandler.formMulti(this);
+        updateRecipe();
+
+        // Only invalidate capabilities when the structure actually changed
+        // size. This method runs unconditionally every lazyTick (~every 0.5s)
+        // via lazyTick(), so calling invalidateCapabilities() here regardless
+        // of whether anything changed was repeatedly killing Create's fluid
+        // pipe network capability cache, which never recovers once
+        // invalidated (BlockCapabilityCacheProvider#invalid is a one-way
+        // latch) -- silently and permanently cutting off Hot Air/CO2 output
+        // shortly after the multiblock formed. Member controller changes are
+        // already handled separately via setController()'s own
+        // refreshCapability() call.
+        if (width != widthBefore || height != heightBefore) {
+            refreshAllMemberCapabilities();
+            refreshCapability();
+        }
+    }
+
+    private void refreshAllMemberCapabilities() {
         for (int yOffset = 0; yOffset < height; yOffset++)
             for (int xOffset = 0; xOffset < width; xOffset++)
                 for (int zOffset = 0; zOffset < width; zOffset++)
                     if (level.getBlockEntity(
                             worldPosition.offset(xOffset, yOffset, zOffset)) instanceof BlastStoveBlockEntity fbe)
                         fbe.refreshCapability();
-
-
-        if (level.isClientSide)
-            return;
-        refreshCapability();
-
-        ConnectivityHandler.formMulti(this);
-		updateRecipe();
     }
 
 
@@ -437,12 +466,15 @@ public class BlastStoveBlockEntity extends SmartBlockEntity implements IHaveGogg
 				
 				if (dir == null)
 					return new CombinedTankWrapper(controller.primaryCapability, controller.secondaryCapability);
-				if (dir.getAxis().isVertical())
-                    return controller.primaryCapability;
-                if (be.getController().getY() == be.getBlockPos().getY())
-                    return controller.secondaryCapability;
-				
-				return null;
+				// Top face: Hot Air output only. Bottom face: fuel input only.
+				// These are exposed on every block of the multiblock, not just the controller's row.
+				if (dir == Direction.UP)
+					return controller.primaryOutputTank;
+				if (dir == Direction.DOWN)
+					return controller.fuelInputTank;
+
+				// Any horizontal face, on any row of the multiblock: Air in / CO2 out.
+				return controller.secondaryCapability;
 			}
         );
     }

@@ -34,6 +34,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
@@ -231,13 +232,16 @@ public class TFMGUtils {
         TFMGLang.translate("goggles.fluid_storage")
                 .forGoggles(tooltip);
 
-        boolean isEmpty = true;
+        // Always emit both lines per tank, even when empty -- see
+        // createFluidTooltip(List, Fluid[], IFluidHandler...) below for why:
+        // conditionally hiding/showing lines based on tank contents makes the
+        // goggle overlay's line count change frame-to-frame as a tank cycles
+        // empty/non-empty during normal operation, which the overlay doesn't
+        // fully clear between frames, causing ghosted/overlapping text.
         for (int i = 0; i < handler.getTanks(); i++) {
             FluidStack fluidStack = handler.getFluidInTank(i);
-            if (fluidStack.isEmpty())
-                continue;
 
-            CreateLang.fluidName(fluidStack)
+            (fluidStack.isEmpty() ? CreateLang.translate("item_attributes.shulker_level.empty") : CreateLang.fluidName(fluidStack))
                     .style(ChatFormatting.GRAY)
                     .forGoggles(tooltip, 1);
 
@@ -250,46 +254,59 @@ public class TFMGUtils {
                             .add(mb)
                             .style(ChatFormatting.DARK_GRAY))
                     .forGoggles(tooltip, 1);
-
-            isEmpty = false;
         }
-
-        if (handler.getTanks() > 1) {
-            if (isEmpty) tooltip.removeLast();
-            return true;
-        }
-
-        if (!isEmpty)
-            return true;
-
-        CreateLang.translate("gui.goggles.fluid_container.capacity")
-                .add(CreateLang.number(handler.getTankCapacity(0))
-                        .add(mb)
-                        .style(ChatFormatting.DARK_GREEN))
-                .style(ChatFormatting.GRAY)
-                .forGoggles(tooltip, 1);
 
         return true;
     }
 	
 	/// Populates a tooltip with all the fluid tanks given to it
 	public static boolean createFluidTooltip(List<Component> tooltip, IFluidHandler... handlers) {
+		return createFluidTooltip(tooltip, null, handlers);
+	}
+
+	/// Same as {@link #createFluidTooltip(List, IFluidHandler...)}, but for each tank slot
+	/// that's currently empty, shows the name from `fallbackFluids` (matched by tank index
+	/// across all handlers in order) instead of a generic "Empty" label -- useful when a
+	/// tank always holds a known fluid (e.g. a machine's fixed recipe output) even though
+	/// it's currently sitting at 0mB. Pass null, or leave an index without a fallback, to
+	/// fall back to the generic "Empty" label for that slot.
+	public static boolean createFluidTooltip(List<Component> tooltip, Fluid[] fallbackFluids, IFluidHandler... handlers) {
 		LangBuilder mb = CreateLang.translate("generic.unit.millibuckets");
+
+		int totalTanks = 0;
+		for (IFluidHandler handler : handlers)
+			totalTanks += handler.getTanks();
+
+		if (totalTanks == 0)
+			return false;
+
 		TFMGLang.translate("goggles.fluid_storage").forGoggles(tooltip);
-		
-		boolean isEmpty = true;
+
+		int tankIndex = 0;
 		for (IFluidHandler handler : handlers) {
-			if (handler.getTanks() == 0)
-				continue;
-			
 			for (int i = 0; i < handler.getTanks(); i++) {
 				FluidStack fluidStack = handler.getFluidInTank(i);
-				if (fluidStack.isEmpty()) continue;
-				
-				CreateLang.fluidName(fluidStack)
-					.style(ChatFormatting.GRAY)
-					.forGoggles(tooltip, 1);
-				
+				Fluid fallback = fallbackFluids != null && tankIndex < fallbackFluids.length ? fallbackFluids[tankIndex] : null;
+
+				// Always emit both lines for this tank slot, even when it's
+				// currently empty, instead of skipping it -- conditionally
+				// hiding/showing a tank's lines based on its fluid state made
+				// the goggle tooltip's total line count change between frames
+				// whenever a tank crossed in or out of empty (which happens
+				// constantly during normal operation, not just at startup).
+				// The overlay doesn't fully clear between a taller and a
+				// shorter frame, so a shrinking tooltip left stale text
+				// ghosting underneath the new, shorter one. Keeping the line
+				// count fixed regardless of tank contents avoids that.
+				LangBuilder nameLine;
+				if (!fluidStack.isEmpty())
+					nameLine = CreateLang.fluidName(fluidStack);
+				else if (fallback != null)
+					nameLine = CreateLang.fluidName(new FluidStack(fallback, 1));
+				else
+					nameLine = CreateLang.translate("item_attributes.shulker_level.empty");
+				nameLine.style(ChatFormatting.GRAY).forGoggles(tooltip, 1);
+
 				CreateLang.builder()
 					.add(CreateLang.number(fluidStack.getAmount())
 						.add(mb)
@@ -299,25 +316,11 @@ public class TFMGUtils {
 						.add(mb)
 						.style(ChatFormatting.DARK_GRAY))
 					.forGoggles(tooltip, 1);
-				
-				isEmpty = false;
+
+				tankIndex++;
 			}
 		}
-		
-		if (isEmpty) {
-			tooltip.removeLast();
-			if (handlers.length == 1 && handlers[0].getTanks() == 1) {
-				CreateLang.translate("gui.goggles.fluid_container.capacity")
-					.add(CreateLang.number(handlers[0].getTankCapacity(0))
-						.add(mb)
-						.style(ChatFormatting.DARK_GREEN))
-					.style(ChatFormatting.GRAY)
-					.forGoggles(tooltip, 1);
-				return true;
-			}
-			return false;
-		}
-		
+
 		return true;
 	}
 	

@@ -7,6 +7,7 @@ import com.drmangotea.tfmg.config.TFMGConfigs;
 import com.drmangotea.tfmg.recipes.CokingRecipe;
 import com.drmangotea.tfmg.registry.TFMGBlockEntities;
 import com.drmangotea.tfmg.registry.TFMGBlocks;
+import com.drmangotea.tfmg.registry.TFMGFluids;
 import com.drmangotea.tfmg.registry.TFMGRecipeTypes;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
@@ -33,6 +34,7 @@ import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -173,8 +175,8 @@ public class CokeOvenBlockEntity extends SmartBlockEntity implements IHaveGoggle
         }
 
         if(timer <= totalTime && primaryTank.getSpace() != 0 && secondaryTank.getSpace() != 0){
-           primaryTank.fill(recipe.getPrimaryResult(), IFluidHandler.FluidAction.EXECUTE);
-           secondaryTank.fill(recipe.getSecondaryResult(), IFluidHandler.FluidAction.EXECUTE);
+           primaryTank.forceFill(recipe.getPrimaryResult(), IFluidHandler.FluidAction.EXECUTE);
+           secondaryTank.forceFill(recipe.getSecondaryResult(), IFluidHandler.FluidAction.EXECUTE);
            timer++;
         }
     }
@@ -204,7 +206,9 @@ public class CokeOvenBlockEntity extends SmartBlockEntity implements IHaveGoggle
 					.style(ChatFormatting.GOLD)
 					.forGoggles(tooltip);
 		
-		TFMGUtils.createFluidTooltip(tooltip, controllerOven.secondaryTank, controllerOven.primaryTank);
+		TFMGUtils.createFluidTooltip(tooltip,
+				new Fluid[] { TFMGFluids.CARBON_DIOXIDE.get(), TFMGFluids.CREOSOTE.get() },
+				controllerOven.secondaryTank, controllerOven.primaryTank);
 		TFMGUtils.createItemTooltip(tooltip, controllerOven.inventory);
         return true;
     }
@@ -248,8 +252,21 @@ public class CokeOvenBlockEntity extends SmartBlockEntity implements IHaveGoggle
         for(BlockPos pos : BlockPos.betweenClosed(getBlockPos(),getBlockPos().above(size-1).relative(facing.getOpposite(),size-1))) {
             if(level.getBlockEntity(pos) instanceof CokeOvenBlockEntity be&&(!level.getBlockState(getBlockPos().relative(facing)).is(TFMGBlocks.COKE_OVEN.get())&&!level.getBlockState(getBlockPos().below()).is(TFMGBlocks.COKE_OVEN.get()))){
 
-                be.controller = getBlockPos();
-                be.refreshCapability();
+                // Only reassign/refresh when the controller is actually changing --
+                // this used to run unconditionally on every call, and since
+                // createMultiblock() re-runs on every block placement during
+                // construction, that meant refreshCapability() (and the
+                // invalidateCapabilities() inside it) fired redundantly, over and
+                // over, on every member, every time. Create's fluid pipe network
+                // capability cache has a one-way "invalid" latch with no recovery
+                // path once tripped, so enough redundant invalidation permanently
+                // and silently cuts a member off from its pipe network -- the
+                // exact cause of Coke Ovens that stop exposing CO2/Creosote after
+                // being built or resized.
+                if (be.controller != getBlockPos()) {
+                    be.controller = getBlockPos();
+                    be.refreshCapability();
+                }
             }
         }
         if(!level.getBlockState(getBlockPos().relative(facing)).is(TFMGBlocks.COKE_OVEN.get())&&!level.getBlockState(getBlockPos().below()).is(TFMGBlocks.COKE_OVEN.get()))
@@ -257,7 +274,9 @@ public class CokeOvenBlockEntity extends SmartBlockEntity implements IHaveGoggle
         for(BlockPos pos : BlockPos.betweenClosed(getBlockPos(), getBlockPos().above(this.size-1).relative(facing.getOpposite(),this.size-1))){
             if(level.getBlockEntity(pos) instanceof CokeOvenBlockEntity be){
                 if(Math.abs(getBlockPos().getX()-be.getBlockPos().getX())>=size || Math.abs(getBlockPos().getY()-be.getBlockPos().getY())>=size || Math.abs(getBlockPos().getZ()-be.getBlockPos().getZ())>=size)
-                    if (be.controller == getBlockPos()||be.controller!=be.getBlockPos()) {
+                    // (was `be.controller == getBlockPos() || be.controller != be.getBlockPos()` --
+                    // a tautology, always true, i.e. not actually a guard at all)
+                    if (be.controller != be.getBlockPos()) {
                         be.controller = be.getBlockPos();
                         be.refreshCapability();
                         be.forceOpen = false;
@@ -318,14 +337,14 @@ public class CokeOvenBlockEntity extends SmartBlockEntity implements IHaveGoggle
 
     @Nonnull
 	public CokeOvenBlockEntity getController() {
-        CokeOvenBlockEntity cokeOven;
-        if(level != null && level.getBlockEntity(controller) instanceof CokeOvenBlockEntity controllerOven){
-            cokeOven = controllerOven;
-        } else {
-            controller = getBlockPos();
-            cokeOven = this;
-        }
-        return cokeOven;
+        if (level != null && level.getBlockEntity(controller) instanceof CokeOvenBlockEntity controllerOven)
+            return controllerOven;
+        // Fall back to self for this call only -- don't persist `controller` here.
+        // A transient resolution failure (e.g. the controller's chunk not yet
+        // loaded) must not permanently detach this block from the real
+        // multiblock controller; it should just try to resolve correctly again
+        // on the next call.
+        return this;
     }
 
     private void refreshCapability() {
