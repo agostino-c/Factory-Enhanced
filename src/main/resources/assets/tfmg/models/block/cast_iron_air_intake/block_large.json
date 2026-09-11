@@ -3,7 +3,7 @@
     "0": "tfmg:block/cast_iron_block",
     "1": "tfmg:block/air_intake/inside_large",
     "2": "tfmg:block/air_intake/inputs",
-    "particle": "tfmg:block/air_intake/air_intake_large"
+    "particle": "minecraft:block/blackstone"
   },
   "elements": [
     {
