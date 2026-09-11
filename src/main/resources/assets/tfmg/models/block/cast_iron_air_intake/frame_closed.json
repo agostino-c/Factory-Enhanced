@@ -1,7 +1,7 @@
 {
   "textures": {
     "0": "tfmg:block/air_intake/air_intake_small",
-    "particle": "tfmg:block/air_intake/air_intake_small"
+    "particle": "minecraft:block/blackstone"
   },
   "elements": [
     {

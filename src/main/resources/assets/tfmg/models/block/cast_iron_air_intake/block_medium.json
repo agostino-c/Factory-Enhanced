@@ -3,7 +3,7 @@
     "0": "tfmg:block/air_intake/air_intake_medium",
     "1": "tfmg:block/air_intake/inputs",
     "2": "tfmg:block/air_intake/inside_medium",
-    "particle": "tfmg:block/air_intake/air_intake_medium"
+    "particle": "minecraft:block/blackstone"
   },
   "elements": [
     {
