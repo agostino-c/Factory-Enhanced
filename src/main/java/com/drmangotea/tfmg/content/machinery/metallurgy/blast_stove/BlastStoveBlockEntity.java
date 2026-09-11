@@ -86,20 +86,28 @@ public class BlastStoveBlockEntity extends SmartBlockEntity implements IHaveGogg
         if (!isController() || level == null)
             return;
 
+        // Establish the real controller/member relationships first, so the
+        // capability refresh below (and the invalidateCapabilities() it
+        // triggers) reflects the post-formation structure instead of a stale
+        // one from before formMulti() reassigns controllers.
+        if (!level.isClientSide) {
+            ConnectivityHandler.formMulti(this);
+            updateRecipe();
+        }
+
+        refreshAllMemberCapabilities();
+
+        if (!level.isClientSide)
+            refreshCapability();
+    }
+
+    private void refreshAllMemberCapabilities() {
         for (int yOffset = 0; yOffset < height; yOffset++)
             for (int xOffset = 0; xOffset < width; xOffset++)
                 for (int zOffset = 0; zOffset < width; zOffset++)
                     if (level.getBlockEntity(
                             worldPosition.offset(xOffset, yOffset, zOffset)) instanceof BlastStoveBlockEntity fbe)
                         fbe.refreshCapability();
-
-
-        if (level.isClientSide)
-            return;
-        refreshCapability();
-
-        ConnectivityHandler.formMulti(this);
-		updateRecipe();
     }
 
 
