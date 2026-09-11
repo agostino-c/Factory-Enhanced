@@ -318,14 +318,14 @@ public class CokeOvenBlockEntity extends SmartBlockEntity implements IHaveGoggle
 
     @Nonnull
 	public CokeOvenBlockEntity getController() {
-        CokeOvenBlockEntity cokeOven;
-        if(level != null && level.getBlockEntity(controller) instanceof CokeOvenBlockEntity controllerOven){
-            cokeOven = controllerOven;
-        } else {
-            controller = getBlockPos();
-            cokeOven = this;
-        }
-        return cokeOven;
+        if (level != null && level.getBlockEntity(controller) instanceof CokeOvenBlockEntity controllerOven)
+            return controllerOven;
+        // Fall back to self for this call only -- don't persist `controller` here.
+        // A transient resolution failure (e.g. the controller's chunk not yet
+        // loaded) must not permanently detach this block from the real
+        // multiblock controller; it should just try to resolve correctly again
+        // on the next call.
+        return this;
     }
 
     private void refreshCapability() {
