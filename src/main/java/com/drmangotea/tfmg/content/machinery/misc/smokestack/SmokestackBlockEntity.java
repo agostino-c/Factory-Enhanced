@@ -15,7 +15,6 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
-import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 
 import java.util.List;
 
@@ -26,7 +25,7 @@ public class SmokestackBlockEntity extends SmartBlockEntity {
 
     int smokeTimer = 0;
 
-    public FluidTank tankInventory;
+    public ForceableFluidTank tankInventory;
     protected IFluidHandler fluidCapability;
 
     protected boolean updateCapability;
@@ -93,13 +92,21 @@ public class SmokestackBlockEntity extends SmartBlockEntity {
             return;
 
         if (getBlockState().getValue(TOP)) {
-            tankInventory.drain(150, IFluidHandler.FluidAction.EXECUTE);
+            // was tankInventory.drain(...) -- the ordinary drain() is a no-op here
+            // because the tank's own .blockExtraction() flag (added to stop
+            // external pipes pulling CO2 back out) also silently blocks this
+            // internal self-vent call, since it's the same method. forceDrain()
+            // bypasses only that flag, not the external-facing capability.
+            tankInventory.forceDrain(150, IFluidHandler.FluidAction.EXECUTE);
             smokeTimer = 40;
         }
 
         if (level != null && level.getBlockEntity(getBlockPos().above()) instanceof SmokestackBlockEntity be) {
             int transferAmount = Math.min(tankInventory.getFluidAmount(), be.tankInventory.getCapacity() - be.tankInventory.getFluidAmount());
-            tankInventory.drain(transferAmount, IFluidHandler.FluidAction.EXECUTE);
+            // Same issue as above -- without forceDrain() this silently failed
+            // while the fill() below still succeeded, which would have
+            // duplicated fluid into the block above instead of relaying it.
+            tankInventory.forceDrain(transferAmount, IFluidHandler.FluidAction.EXECUTE);
             be.tankInventory.fill(new FluidStack(TFMGFluids.CARBON_DIOXIDE.get(), transferAmount), IFluidHandler.FluidAction.EXECUTE);
         }
     }
