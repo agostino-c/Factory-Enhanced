@@ -86,19 +86,40 @@ public class BlastStoveBlockEntity extends SmartBlockEntity implements IHaveGogg
         if (!isController() || level == null)
             return;
 
+        if (level.isClientSide) {
+            // Client-side capability objects are only used for local display
+            // (goggles), not real fluid transfer, so refreshing them on this
+            // timer is harmless -- unlike the server, nothing here can trip
+            // Create's one-shot capability-invalidation latch on a live pipe
+            // network.
+            refreshAllMemberCapabilities();
+            return;
+        }
+
         // Establish the real controller/member relationships first, so the
         // capability refresh below (and the invalidateCapabilities() it
         // triggers) reflects the post-formation structure instead of a stale
         // one from before formMulti() reassigns controllers.
-        if (!level.isClientSide) {
-            ConnectivityHandler.formMulti(this);
-            updateRecipe();
-        }
+        int widthBefore = width;
+        int heightBefore = height;
 
-        refreshAllMemberCapabilities();
+        ConnectivityHandler.formMulti(this);
+        updateRecipe();
 
-        if (!level.isClientSide)
+        // Only invalidate capabilities when the structure actually changed
+        // size. This method runs unconditionally every lazyTick (~every 0.5s)
+        // via lazyTick(), so calling invalidateCapabilities() here regardless
+        // of whether anything changed was repeatedly killing Create's fluid
+        // pipe network capability cache, which never recovers once
+        // invalidated (BlockCapabilityCacheProvider#invalid is a one-way
+        // latch) -- silently and permanently cutting off Hot Air/CO2 output
+        // shortly after the multiblock formed. Member controller changes are
+        // already handled separately via setController()'s own
+        // refreshCapability() call.
+        if (width != widthBefore || height != heightBefore) {
+            refreshAllMemberCapabilities();
             refreshCapability();
+        }
     }
 
     private void refreshAllMemberCapabilities() {
