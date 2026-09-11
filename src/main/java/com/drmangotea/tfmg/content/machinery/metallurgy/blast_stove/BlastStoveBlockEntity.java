@@ -437,12 +437,15 @@ public class BlastStoveBlockEntity extends SmartBlockEntity implements IHaveGogg
 				
 				if (dir == null)
 					return new CombinedTankWrapper(controller.primaryCapability, controller.secondaryCapability);
-				if (dir.getAxis().isVertical())
-                    return controller.primaryCapability;
-                if (be.getController().getY() == be.getBlockPos().getY())
-                    return controller.secondaryCapability;
-				
-				return null;
+				// Top face: Hot Air output only. Bottom face: fuel input only.
+				// These are exposed on every block of the multiblock, not just the controller's row.
+				if (dir == Direction.UP)
+					return controller.primaryOutputTank;
+				if (dir == Direction.DOWN)
+					return controller.fuelInputTank;
+
+				// Any horizontal face, on any row of the multiblock: Air in / CO2 out.
+				return controller.secondaryCapability;
 			}
         );
     }
