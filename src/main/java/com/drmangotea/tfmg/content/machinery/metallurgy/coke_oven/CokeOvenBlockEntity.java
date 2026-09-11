@@ -248,8 +248,21 @@ public class CokeOvenBlockEntity extends SmartBlockEntity implements IHaveGoggle
         for(BlockPos pos : BlockPos.betweenClosed(getBlockPos(),getBlockPos().above(size-1).relative(facing.getOpposite(),size-1))) {
             if(level.getBlockEntity(pos) instanceof CokeOvenBlockEntity be&&(!level.getBlockState(getBlockPos().relative(facing)).is(TFMGBlocks.COKE_OVEN.get())&&!level.getBlockState(getBlockPos().below()).is(TFMGBlocks.COKE_OVEN.get()))){
 
-                be.controller = getBlockPos();
-                be.refreshCapability();
+                // Only reassign/refresh when the controller is actually changing --
+                // this used to run unconditionally on every call, and since
+                // createMultiblock() re-runs on every block placement during
+                // construction, that meant refreshCapability() (and the
+                // invalidateCapabilities() inside it) fired redundantly, over and
+                // over, on every member, every time. Create's fluid pipe network
+                // capability cache has a one-way "invalid" latch with no recovery
+                // path once tripped, so enough redundant invalidation permanently
+                // and silently cuts a member off from its pipe network -- the
+                // exact cause of Coke Ovens that stop exposing CO2/Creosote after
+                // being built or resized.
+                if (be.controller != getBlockPos()) {
+                    be.controller = getBlockPos();
+                    be.refreshCapability();
+                }
             }
         }
         if(!level.getBlockState(getBlockPos().relative(facing)).is(TFMGBlocks.COKE_OVEN.get())&&!level.getBlockState(getBlockPos().below()).is(TFMGBlocks.COKE_OVEN.get()))
@@ -257,7 +270,9 @@ public class CokeOvenBlockEntity extends SmartBlockEntity implements IHaveGoggle
         for(BlockPos pos : BlockPos.betweenClosed(getBlockPos(), getBlockPos().above(this.size-1).relative(facing.getOpposite(),this.size-1))){
             if(level.getBlockEntity(pos) instanceof CokeOvenBlockEntity be){
                 if(Math.abs(getBlockPos().getX()-be.getBlockPos().getX())>=size || Math.abs(getBlockPos().getY()-be.getBlockPos().getY())>=size || Math.abs(getBlockPos().getZ()-be.getBlockPos().getZ())>=size)
-                    if (be.controller == getBlockPos()||be.controller!=be.getBlockPos()) {
+                    // (was `be.controller == getBlockPos() || be.controller != be.getBlockPos()` --
+                    // a tautology, always true, i.e. not actually a guard at all)
+                    if (be.controller != be.getBlockPos()) {
                         be.controller = be.getBlockPos();
                         be.refreshCapability();
                         be.forceOpen = false;
