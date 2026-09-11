@@ -7,6 +7,7 @@ import com.drmangotea.tfmg.config.TFMGConfigs;
 import com.drmangotea.tfmg.recipes.CokingRecipe;
 import com.drmangotea.tfmg.registry.TFMGBlockEntities;
 import com.drmangotea.tfmg.registry.TFMGBlocks;
+import com.drmangotea.tfmg.registry.TFMGFluids;
 import com.drmangotea.tfmg.registry.TFMGRecipeTypes;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
@@ -33,6 +34,7 @@ import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -204,7 +206,9 @@ public class CokeOvenBlockEntity extends SmartBlockEntity implements IHaveGoggle
 					.style(ChatFormatting.GOLD)
 					.forGoggles(tooltip);
 		
-		TFMGUtils.createFluidTooltip(tooltip, controllerOven.secondaryTank, controllerOven.primaryTank);
+		TFMGUtils.createFluidTooltip(tooltip,
+				new Fluid[] { TFMGFluids.CARBON_DIOXIDE.get(), TFMGFluids.CREOSOTE.get() },
+				controllerOven.secondaryTank, controllerOven.primaryTank);
 		TFMGUtils.createItemTooltip(tooltip, controllerOven.inventory);
         return true;
     }
